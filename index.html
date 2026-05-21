@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Topological Sort — Honda RA621H | Kahn's Algorithm</title>
+  <meta name="description" content="Step-by-step visualization of Kahn's BFS-based topological sort for Honda RA621H F1 assembly scheduling. 103 components, 216 dependencies." />
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Pyodide: runs kahn.py (Python) in the browser via WebAssembly -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.27.5/full/pyodide.js"></script>
+</head>
+<body>
+
+<!-- ════════════════════════════════════
+     HEADER
+════════════════════════════════════ -->
+<header>
+  <div class="hdr-left">
+    <div class="hdr-badge">F1 · 2021 WDC</div>
+    <div class="hdr-title">Honda <em>RA621H</em> — Topological Sort</div>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-stat">
+      <div class="v" id="hdr-nodes">—</div>
+      <div class="l">Nodes</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="v" id="hdr-edges">—</div>
+      <div class="l">Edges</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="v" id="hdr-waves">—</div>
+      <div class="l">Waves</div>
+    </div>
+    <div class="hdr-stat">
+      <div class="v" id="hdr-steps">—</div>
+      <div class="l">Steps</div>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════
+     TOP BAR — Algo phases + controls
+════════════════════════════════════ -->
+<div class="top-bar">
+
+  <!-- Algorithm phase indicators -->
+  <div class="algo-steps-inline">
+    <div class="asi-step" id="asi-1">
+      <div class="asi-num">1</div>
+      <div class="asi-label">Hitung in-degree</div>
+    </div>
+    <span class="asi-arrow">→</span>
+    <div class="asi-step" id="asi-2">
+      <div class="asi-num">2</div>
+      <div class="asi-label">Mulai wave</div>
+    </div>
+    <span class="asi-arrow">→</span>
+    <div class="asi-step" id="asi-3">
+      <div class="asi-num">3</div>
+      <div class="asi-label">Proses node</div>
+    </div>
+    <span class="asi-arrow">→</span>
+    <div class="asi-step" id="asi-4">
+      <div class="asi-num">4</div>
+      <div class="asi-label">Selesai</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn" id="btn-first" title="First step (Home)">⏮</button>
+    <button class="btn" id="btn-prev"  title="Previous (←)">‹ Prev</button>
+    <button class="btn primary" id="btn-play" title="Play/Pause (Space)">▶ Play</button>
+    <button class="btn" id="btn-next"  title="Next (→)">Next ›</button>
+    <button class="btn" id="btn-last"  title="Last step (End)">⏭</button>
+
+    <div class="speed-wrap">
+      <label>Speed: <span id="speed-label">mid</span></label>
+      <input type="range" id="speed-range" min="1" max="10" value="5" />
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════
+     PAGE GRID
+════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ─────────────────────────────
+       LEFT: Step Log + In-Degree
+  ───────────────────────────────── -->
+  <div class="left-panel">
+
+    <div class="panel-header">
+      <h3>Step Log</h3>
+      <span class="step-counter" id="step-counter">— / —</span>
+    </div>
+
+    <div class="step-log" id="step-log">
+      <!-- populated by JS -->
+    </div>
+
+    <!-- In-Degree Tracker -->
+    <div class="indegree-panel">
+      <div class="panel-header">
+        <h3>In-Degree Tracker</h3>
+        <span style="font-family:var(--ff-m);font-size:0.6rem;color:var(--t3)">
+          <span style="color:#22C55E">■</span> = 0 (ready)
+        </span>
+      </div>
+      <div class="indegree-grid" id="indegree-grid">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─────────────────────────────
+       RIGHT: Wave Grid + Order Strip
+  ───────────────────────────────── -->
+  <div class="right-panel">
+
+    <!-- Sorted Order Strip -->
+    <div class="order-strip">
+      <div class="panel-header">
+        <h3>Sorted Order — Output</h3>
+        <span style="font-family:var(--ff-m);font-size:0.6rem;color:var(--t3)">valid assembly sequence →</span>
+      </div>
+      <div class="order-nodes" id="order-nodes">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+    <!-- Result Banner -->
+    <div class="result-banner" id="result-banner"></div>
+
+    <!-- Wave grid -->
+    <div class="wave-area" id="wave-area">
+      <div style="text-align:center;padding:3rem;font-family:var(--ff-m);font-size:0.75rem;color:var(--t3);letter-spacing:0.1em">
+        LOADING DATASET…
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════
+     PSEUDOCODE OVERLAY
+════════════════════════════════════ -->
+<div class="pseudo-panel" id="pseudo-panel">
+  <div class="pseudo-header" id="pseudo-header">
+    <h4>Kahn's Algorithm — Pseudocode</h4>
+    <span class="pseudo-toggle">▲ collapse</span>
+  </div>
+  <div class="pseudo-body">
+    <div class="pseudo-line" data-line="1">
+      <span class="pl-num">1</span>
+      <span class="pl-code"><span class="kw">function</span> <span class="fn">kahnSort</span>(graph):</span>
+    </div>
+    <div class="pseudo-line" data-line="2">
+      <span class="pl-num">2</span>
+      <span class="pl-code">&nbsp;&nbsp;<span class="vr">degree</span> = <span class="fn">computeInDegree</span>(graph)</span>
+    </div>
+    <div class="pseudo-line" data-line="3">
+      <span class="pl-num">3</span>
+      <span class="pl-code">&nbsp;&nbsp;<span class="vr">queue</span> = [n <span class="kw">for</span> n <span class="kw">in</span> nodes <span class="kw">if</span> degree[n]==<span class="nm">0</span>]</span>
+    </div>
+    <div class="pseudo-line" data-line="4">
+      <span class="pl-num">4</span>
+      <span class="pl-code">&nbsp;&nbsp;<span class="vr">order</span>, <span class="vr">waves</span> = [], []</span>
+    </div>
+    <div class="pseudo-line" data-line="5">
+      <span class="pl-num">5</span>
+      <span class="pl-code">&nbsp;&nbsp;<span class="cm">// O(V+E) total</span></span>
+    </div>
+    <div class="pseudo-line" data-line="6">
+      <span class="pl-num">6</span>
+      <span class="pl-code">&nbsp;</span>
+    </div>
+    <div class="pseudo-line" data-line="7">
+      <span class="pl-num">7</span>
+      <span class="pl-code">&nbsp;&nbsp;<span class="kw">while</span> queue <span class="kw">not</span> empty:</span>
+    </div>
+    <div class="pseudo-line" data-line="8">
+      <span class="pl-num">8</span>
+      <span class="pl-code">&nbsp;&nbsp;&nbsp;&nbsp;<span class="vr">wave</span> = snapshot(queue)</span>
+    </div>
+    <div class="pseudo-line" data-line="9">
+      <span class="pl-num">9</span>
+      <span class="pl-code">&nbsp;&nbsp;&nbsp;&nbsp;waves.append(wave) <span class="cm">// parallel batch</span></span>
+    </div>
+    <div class="pseudo-line" data-line="10">
+      <span class="pl-num">10</span>
+      <span class="pl-code">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">for</span> node <span class="kw">in</span> wave:</span>
+    </div>
+    <div class="pseudo-line" data-line="11">
+      <span class="pl-num">11</span>
+      <span class="pl-code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;order.append(node)</span>
+    </div>
+    <div class="pseudo-line" data-line="12">
+      <span class="pl-num">12</span>
+      <span class="pl-code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">for</span> succ <span class="kw">in</span> adj[node]:</span>
+    </div>
+    <div class="pseudo-line" data-line="13">
+      <span class="pl-num">13</span>
+      <span class="pl-code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;degree[succ] -= <span class="nm">1</span></span>
+    </div>
+    <div class="pseudo-line" data-line="14">
+      <span class="pl-num">14</span>
+      <span class="pl-code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">if</span> degree[succ]==<span class="nm">0</span>: queue.add(succ)</span>
+    </div>
+    <div class="pseudo-line" data-line="15">
+      <span class="pl-num">15</span>
+      <span class="pl-code">&nbsp;</span>
+    </div>
+    <div class="pseudo-line" data-line="16">
+      <span class="pl-num">16</span>
+      <span class="pl-code">&nbsp;&nbsp;<span class="kw">if</span> len(order) &lt; len(nodes):</span>
+    </div>
+    <div class="pseudo-line" data-line="17">
+      <span class="pl-num">17</span>
+      <span class="pl-code">&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">raise</span> CycleDetectedError</span>
+    </div>
+    <div class="pseudo-line" data-line="18">
+      <span class="pl-num">18</span>
+      <span class="pl-code">&nbsp;&nbsp;<span class="kw">return</span> order, waves</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     FOOTER
+════════════════════════════════════ -->
+<footer>
+  <p>Honda RA621H Topological Sort · Kahn's BFS Algorithm · O(V+E) · Proyek SDA 2025</p>
+  <p>← → keys / Space to play · Click any step in the log</p>
+</footer>
+
+<!-- Scripts -->
+<script src="js/main.js"></script>
+
+</body>
+</html>
